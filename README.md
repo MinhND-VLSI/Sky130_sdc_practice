@@ -1,99 +1,102 @@
 # Sky130 SDC Practice — Sequential Adder Timing Closure
 
-Bài thực hành viết SDC constraint cho một module sequential (có flip-flop, async reset,
-feedback path nội bộ), chạy qua flow Yosys (synthesis) + OpenSTA (static timing analysis)
-trên thư viện chuẩn Sky130 HD.
+A hands-on exercise in writing SDC constraints for a sequential module (with a real
+flip-flop, async reset, and an internal feedback path), run through the Yosys
+(synthesis) + OpenSTA (static timing analysis) flow on the Sky130 HD standard cell
+library.
 
-## Mục tiêu
+## Goals
 
-- Hiểu rõ từng loại timing path: Input→Register, Register→Register, Register→Output
-- Viết đúng các constraint cơ bản: `create_clock`, `set_input/output_delay`,
+- Understand the core timing path types: Input→Register, Register→Register, Register→Output
+- Write the fundamental constraints correctly: `create_clock`, `set_input/output_delay`,
   `set_clock_uncertainty`, `set_false_path`, `set_max_fanout`, `set_max_transition`
-- Đọc và phân tích report STA thật (cả trường hợp PASS lẫn FAIL)
-- Hiểu WNS (Worst Negative Slack) và TNS (Total Negative Slack)
+- Read and interpret real STA reports (both PASS and FAIL cases)
+- Understand WNS (Worst Negative Slack) and TNS (Total Negative Slack)
 
-## Thiết kế: `seq_adder.v`
+## Design: `seq_adder.v`
 
-Bộ cộng dồn tuần tự 8-bit: mỗi chu kỳ clock, nếu `en=1`, `data_out` được cộng dồn với
-`data_in` (`data_out <= data_out + data_in`). Có async active-low reset (`rst_n`).
+An 8-bit sequential accumulator: on every clock cycle, if `en=1`, `data_out` accumulates
+`data_in` (`data_out <= data_out + data_in`). Includes an async active-low reset (`rst_n`).
 
-Module này minh họa đủ 4 loại path cần quan tâm khi viết SDC:
+This module illustrates all 4 timing path types relevant to writing an SDC:
 
-| Loại path | Ví dụ trong module | Constraint tương ứng |
+| Path type | Example in the module | Corresponding constraint |
 |---|---|---|
 | Input port → Register | `data_in`, `en` → FF | `set_input_delay` |
-| Register → Register (feedback) | `data_out` → logic cộng → `data_out` | tự động check qua `create_clock` |
+| Register → Register (feedback) | `data_out` → adder logic → `data_out` | checked automatically via `create_clock` |
 | Register → Output port | FF → `data_out`, `valid_out` | `set_output_delay` |
 | Async reset | `rst_n` | `set_false_path` |
 
-## Flow chạy thử
+## Flow
 
 ```bash
-# 1. Tổng hợp RTL -> gate-level netlist bằng Yosys
+# 1. Synthesize RTL -> gate-level netlist with Yosys
 yosys -p "read_verilog seq_adder.v; synth -top seq_adder; \
           dfflibmap -liberty sky130_fd_sc_hd__tt_025C_1v80.lib; \
           abc -liberty sky130_fd_sc_hd__tt_025C_1v80.lib; \
           write_verilog seq_adder_netlist.v"
 
-# 2. Chạy OpenSTA (qua Docker image chính thức của OpenROAD)
+# 2. Run OpenSTA (via OpenROAD's official Docker image)
 docker run -it -v $(pwd):/input openroad/opensta
-# trong TCL shell của OpenSTA:
+# inside OpenSTA's TCL shell:
 source /input/run_sta.tcl
 ```
 
-File `.lib` của Sky130 HD không được đính kèm trong repo này (thuộc PDK, không nên commit) —
-lấy qua [Volare](https://github.com/efabless/volare) hoặc cài đặt cùng OpenLane.
+The Sky130 HD `.lib` file is not included in this repo (it's part of the PDK and
+shouldn't be committed) — get it via [Volare](https://github.com/efabless/volare) or
+as part of an OpenLane install.
 
-## Kết quả thí nghiệm 1 — `seq_adder_10ns.sdc` (period = 10ns, 100MHz)
+## Experiment 1 — `seq_adder_10ns.sdc` (period = 10ns, 100MHz)
 
-Constraint chuẩn, period dư cho logic combinational bên trong (10 gate,
-tổng delay ~4.53ns).
+Standard constraint, with plenty of margin for the internal combinational logic
+(10 gates, ~4.53ns total delay).
 
-| Check | Data required | Data arrival | Slack | Kết quả |
+| Check | Data required | Data arrival | Slack | Result |
 |---|---|---|---|---|
 | Setup (max) | 9.75 ns | 4.53 ns | **+5.22 ns** | MET |
 | Hold (min) | 0.12 ns | 0.41 ns | **+0.29 ns** | MET |
 
-Chi tiết: [`results/pass_10ns.txt`](results/pass_10ns.txt)
+Full report: [`results/pass_10ns.txt`](results/pass_10ns.txt)
 
-## Kết quả thí nghiệm 2 — `seq_adder_2ns.sdc` (period = 2ns, 500MHz)
+## Experiment 2 — `seq_adder_2ns.sdc` (period = 2ns, 500MHz)
 
-Hạ period xuống thấp để quan sát setup violation — logic combinational (4.53ns)
-không thể nào vừa trong 1 chu kỳ 2ns.
+Deliberately lowered the period to trigger a setup violation — the combinational logic
+(4.53ns) simply can't fit inside a 2ns cycle.
 
-| Check | Data required | Data arrival | Slack | Kết quả |
+| Check | Data required | Data arrival | Slack | Result |
 |---|---|---|---|---|
 | Setup (max) | 1.75 ns | 4.53 ns | **-2.78 ns** | **VIOLATED** |
-| Hold (min) | 0.12 ns | 0.41 ns | +0.29 ns | MET (không đổi) |
+| Hold (min) | 0.12 ns | 0.41 ns | +0.29 ns | MET (unchanged) |
 
 ```
 tns max -32.08
 wns max -2.78
 ```
 
-Chi tiết: [`results/fail_2ns.txt`](results/fail_2ns.txt)
+Full report: [`results/fail_2ns.txt`](results/fail_2ns.txt)
 
-### Nhận xét
+### Notes
 
-- **WNS = -2.78** trùng khớp với slack của path xem ở trên — đây chính là path tệ nhất
-  trong toàn thiết kế.
-- **TNS = -32.08** lớn hơn nhiều so với 1 path đơn lẻ → có nhiều endpoint khác (các bit
-  khác của `data_out[7:0]`) cũng đang vi phạm setup cùng lúc, cộng dồn lại.
-- **Hold không bị ảnh hưởng** bởi việc đổi period, vì hold check chỉ so sánh trong cùng
-  1 chu kỳ clock (giữa cạnh hiện tại và dữ liệu đến ngay sau đó), không liên quan đến
-  độ dài chu kỳ kế tiếp.
-- Bài học: logic combinational giữa 2 flip-flop (ở đây là phép cộng 8-bit, ~10 gate)
-  quyết định tần số tối đa khả thi của thiết kế — muốn chạy nhanh hơn, cần rút ngắn
-  chuỗi logic (VD: dùng carry-lookahead thay vì ripple-carry) hoặc thêm pipeline stage.
+- **WNS = -2.78** matches the slack of the path shown above — this is the single worst
+  path in the design.
+- **TNS = -32.08** is much larger than one path's slack alone → several other endpoints
+  (other bits of `data_out[7:0]`) are also violating setup at the same time, adding up.
+- **Hold is unaffected** by the period change, since the hold check only compares
+  within a single clock cycle (the current edge vs. data arriving right after it) —
+  it has nothing to do with the length of the next cycle.
+- Takeaway: the combinational logic between two flip-flops (here, an 8-bit add, ~10
+  gates) sets the maximum achievable frequency for the design — running faster requires
+  shortening that logic chain (e.g., carry-lookahead instead of ripple-carry) or adding
+  a pipeline stage.
 
-## Cấu trúc repo
+## Repo structure
 
 ```
-seq_adder.v               RTL gốc (sequential, có FF thật)
-seq_adder_10ns.sdc         SDC constraint, period=10ns (PASS)
-seq_adder_2ns.sdc          SDC constraint, period=2ns  (cố tình VIOLATED để học)
-run_sta.tcl                script chạy OpenSTA
+seq_adder.v                original RTL (sequential, with a real FF)
+seq_adder_10ns.sdc          SDC constraint, period=10ns (PASS)
+seq_adder_2ns.sdc           SDC constraint, period=2ns  (deliberately VIOLATED, for learning)
+run_sta.tcl                 script to run OpenSTA
 results/
-  pass_10ns.txt            report đầy đủ, trường hợp PASS
-  fail_2ns.txt             report đầy đủ, trường hợp VIOLATED
+  pass_10ns.txt              full report, PASS case
+  fail_2ns.txt               full report, VIOLATED case
 ```
