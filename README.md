@@ -46,7 +46,7 @@ lấy qua [Volare](https://github.com/efabless/volare) hoặc cài đặt cùng 
 
 ## Kết quả thí nghiệm 1 — `seq_adder_10ns.sdc` (period = 10ns, 100MHz)
 
-Constraint chuẩn, period dư rộng rãi cho logic combinational bên trong (10 gate,
+Constraint chuẩn, period dư cho logic combinational bên trong (10 gate,
 tổng delay ~4.53ns).
 
 | Check | Data required | Data arrival | Slack | Kết quả |
@@ -58,8 +58,8 @@ Chi tiết: [`results/pass_10ns.txt`](results/pass_10ns.txt)
 
 ## Kết quả thí nghiệm 2 — `seq_adder_2ns.sdc` (period = 2ns, 500MHz)
 
-Cố tình hạ period xuống thấp để quan sát setup violation — logic combinational (4.53ns)
-không thể nào "vừa" trong 1 chu kỳ 2ns.
+Hạ period xuống thấp để quan sát setup violation — logic combinational (4.53ns)
+không thể nào vừa trong 1 chu kỳ 2ns.
 
 | Check | Data required | Data arrival | Slack | Kết quả |
 |---|---|---|---|---|
