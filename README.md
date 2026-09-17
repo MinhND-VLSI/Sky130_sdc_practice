@@ -29,8 +29,6 @@ This module illustrates all 4 timing path types relevant to writing an SDC:
 
 ## Flow
 
-**Option A — manual (step by step):**
-
 ```bash
 # 1. Synthesize RTL -> gate-level netlist with Yosys
 yosys -p "read_verilog seq_adder.v; synth -top seq_adder; \
@@ -45,17 +43,9 @@ source /input/run_sta_10ns.tcl   # period=10ns  (PASS)
 source /input/run_sta_2ns.tcl    # period=2ns   (VIOLATED)
 ```
 
-**Option B — via Makefile (recommended):**
-
-```bash
-make sta10   # synth + STA with the 10ns constraint (PASS)
-make sta2    # synth + STA with the 2ns constraint (VIOLATED)
-make clean   # remove the generated netlist
-```
-
 The Sky130 HD `.lib` file is not included in this repo (it's part of the PDK and
 shouldn't be committed) — get it via [Volare](https://github.com/efabless/volare) or
-as part of an OpenLane install. Place it in the repo root before running the flow.
+as part of an OpenLane install.
 
 ## Experiment 1 — `seq_adder_10ns.sdc` (period = 10ns, 100MHz)
 
@@ -108,7 +98,6 @@ seq_adder_10ns.sdc          SDC constraint, period=10ns (PASS)
 seq_adder_2ns.sdc           SDC constraint, period=2ns  (deliberately VIOLATED, for learning)
 run_sta_10ns.tcl             OpenSTA script using seq_adder_10ns.sdc
 run_sta_2ns.tcl               OpenSTA script using seq_adder_2ns.sdc
-Makefile                     wraps synth + both STA runs into `make sta10` / `make sta2`
 results/
   pass_10ns.txt               full report, PASS case
   fail_2ns.txt                full report, VIOLATED case
