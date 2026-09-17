@@ -1,7 +1,7 @@
 set sdc_version 2.1
 set_units -time ns -capacitance pF
 
-create_clock -name clk -period 10 [get_ports clk]
+create_clock -name clk -period 2 [get_ports clk]
 set_clock_uncertainty 0.15 [get_clocks clk]
 set_clock_transition 0.1 [get_clocks clk]
 
